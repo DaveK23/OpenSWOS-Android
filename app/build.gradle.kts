@@ -1,4 +1,6 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.io.File
+import java.nio.file.Files
 
 plugins {
   alias(libs.plugins.android.application)
@@ -142,3 +144,105 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+abstract class CopyApkTask : DefaultTask() {
+  @get:Internal
+  abstract val apkDir: DirectoryProperty
+
+  @get:Internal
+  abstract val outputDir: DirectoryProperty
+
+  private fun hasOtherProcessOpenFile(file: File): Boolean {
+    val targetCanonicalPath = try {
+      file.canonicalPath
+    } catch (e: Exception) {
+      file.absolutePath
+    }
+
+    val procDir = File("/proc")
+    if (!procDir.exists() || !procDir.isDirectory) return false
+
+    val currentPid = try {
+      ProcessHandle.current().pid()
+    } catch (e: Throwable) {
+      -1L
+    }
+
+    val pids = procDir.listFiles { f -> f.isDirectory && f.name.all { it.isDigit() } } ?: return false
+    for (pidDir in pids) {
+      val pidStr = pidDir.name
+      val pid = pidStr.toLongOrNull() ?: continue
+      if (pid == currentPid) continue
+
+      val fdDir = File(pidDir, "fd")
+      val fds = fdDir.listFiles() ?: continue
+      for (fd in fds) {
+        try {
+          val linkTarget = Files.readSymbolicLink(fd.toPath()).toFile().canonicalPath
+          if (linkTarget == targetCanonicalPath) {
+            println("Process $pid has an open handle to $targetCanonicalPath")
+            return true
+          }
+        } catch (e: Exception) {
+          // Ignore deleted files, permission errors, or dynamic /proc race conditions
+        }
+      }
+    }
+    return false
+  }
+
+  @TaskAction
+  fun run() {
+    val dir = apkDir.get().asFile
+    val file = File(dir, "app-debug.apk")
+    val destDir = outputDir.get().asFile
+    val destFile = File(destDir, file.name)
+
+    // Delay start: Pauses briefly to let file packaging settle
+    Thread.sleep(1500)
+
+    // Wait for source file size to stabilize and check /proc for open handles
+    var lastSize = -1L
+    var stableCount = 0
+    for (attempt in 1..100) {
+      if (file.exists()) {
+        val currentSize = file.length()
+        if (currentSize > 0 && currentSize == lastSize) {
+          stableCount++
+          if (stableCount >= 7) {
+            val sourceHasHandles = hasOtherProcessOpenFile(file)
+            val destHasHandles = destFile.exists() && hasOtherProcessOpenFile(destFile)
+            if (sourceHasHandles || destHasHandles) {
+              println("APK size stable at $currentSize, but open file handles found via /proc. Resetting stableCount (attempt $attempt/100)...")
+              stableCount = 0
+            } else {
+              println("APK is fully stabilized at $currentSize bytes with no open file handles.")
+              break
+            }
+          }
+        } else {
+          stableCount = 0
+        }
+        lastSize = currentSize
+      }
+      Thread.sleep(500)
+    }
+
+    if (file.exists() && file.length() > 0) {
+      file.copyTo(destFile, overwrite = true)
+      println("Successfully copied APK to ${destFile.absolutePath} (${destFile.length()} bytes)")
+    } else {
+      println("Source APK file not found or empty: ${file.absolutePath}")
+    }
+  }
+}
+
+val copyDebugApk = tasks.register<CopyApkTask>("copyDebugApk") {
+  apkDir.set(layout.buildDirectory.dir("outputs/apk/debug"))
+  outputDir.set(layout.projectDirectory.dir(".."))
+}
+
+afterEvaluate {
+  tasks.findByName("assembleDebug")?.finalizedBy(copyDebugApk)
+}
+
