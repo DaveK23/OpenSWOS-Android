@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Ball Drop Shadow -->
+    <path
+        android:fillColor="#40000000"
+        android:pathData="M54,78 m-20,0 a20,6 0 1,0 40,0 a20,6 0 1,0 -40,0" />
+    <!-- Ball Outer Base (White) -->
+    <path
+        android:fillColor="#F4F9F4"
+        android:strokeColor="#1C2826"
+        android:strokeWidth="1.8"
+        android:pathData="M54,54 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0" />
+    <!-- Ball Shading / Seams -->
+    <!-- Center pentagon -->
+    <path
+        android:fillColor="#1B262C"
+        android:strokeColor="#1B262C"
+        android:strokeWidth="0.8"
+        android:pathData="M54,46 L60,51 L58,58 L50,58 L48,51 Z" />
+    <!-- Center pentagon spokes out to edges -->
+    <path
+        android:strokeColor="#1B262C"
+        android:strokeWidth="1.2"
+        android:pathData="M54,46 L54,36 M60,51 L70,49 M58,58 L66,66 M50,58 L42,66 M48,51 L38,49" />
+    <!-- Top patch -->
+    <path
+        android:fillColor="#1B262C"
+        android:pathData="M54,36 L47,33 C49,32.4 51.5,32 54,32 C56.5,32 59,32.4 61,33 Z" />
+    <!-- Top-Right patch -->
+    <path
+        android:fillColor="#1B262C"
+        android:pathData="M70,49 L74,44 C75.5,46.5 76,49.5 76,52 L70,55 Z" />
+    <!-- Bottom-Right patch -->
+    <path
+        android:fillColor="#1B262C"
+        android:pathData="M66,66 L72,69 C70,72 67,74.5 64,75.5 L60,70 Z" />
+    <!-- Bottom-Left patch -->
+    <path
+        android:fillColor="#1B262C"
+        android:pathData="M42,66 L48,70 L44,75.5 C41,74.5 38,72 36,69 Z" />
+    <!-- Top-Left patch -->
+    <path
+        android:fillColor="#1B262C"
+        android:pathData="M38,49 L38,55 L32,52 C32,49.5 32.5,46.5 34,44 Z" />
+    <!-- Outer rim highlight -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.0"
+        android:pathData="M37,40 C41,35 48,33 54,33" />
+</vector>

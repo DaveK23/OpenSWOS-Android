@@ -1,0 +1,6 @@
+{
+  "name": "OpenSWOS",
+  "description": "Sensible World of Soccer retro arcade football game for Android with high-performance Jetpack Compose match engine, ball aftertouch curve physics, 11v11 teams, tactics, and tournaments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
