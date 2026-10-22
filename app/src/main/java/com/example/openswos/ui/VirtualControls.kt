@@ -195,7 +195,8 @@ fun DualActionButtons(
     onTackle: () -> Unit,
     onHaptic: () -> Unit
 ) {
-    val hasBall = engine.playerHasBall
+    val isHomeRestart = engine.restartType != null && engine.restartSide == com.example.openswos.model.TeamSide.HOME
+    val hasBall = engine.playerHasBall || isHomeRestart
 
     Row(
         modifier = modifier,
@@ -215,7 +216,7 @@ fun DualActionButtons(
                         )
                     )
                 )
-                .pointerInput(hasBall) {
+                .pointerInput(hasBall, isHomeRestart) {
                     detectTapGestures(
                         onPress = {
                             onHaptic()
@@ -233,14 +234,14 @@ fun DualActionButtons(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = if (hasBall) "PASS" else "SLIDE",
+                    text = if (engine.restartType == MatchEngine.RestartType.THROW_IN) "THROW" else if (hasBall) "PASS" else "SLIDE",
                     fontFamily = ArcadeFontFamily,
                     fontSize = 9.sp,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (hasBall) "TAP" else "TACKLE",
+                    text = if (engine.restartType == MatchEngine.RestartType.THROW_IN) "IN" else if (hasBall) "TAP" else "TACKLE",
                     fontFamily = ArcadeFontFamily,
                     fontSize = 7.sp,
                     color = SwosYellow
