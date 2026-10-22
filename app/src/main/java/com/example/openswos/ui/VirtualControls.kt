@@ -195,7 +195,7 @@ fun DualActionButtons(
     onTackle: () -> Unit,
     onHaptic: () -> Unit
 ) {
-    val hasBall = engine.ball.owner == engine.controlledPlayer
+    val hasBall = engine.playerHasBall
 
     Row(
         modifier = modifier,

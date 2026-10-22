@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -99,21 +100,20 @@ fun MatchScreen(
     }
 
     // 60 FPS Game Loop using withFrameNanos
-    var lastFrameTimeNanos by remember { mutableFloatStateOf(0f) }
+    var renderTick by remember { mutableLongStateOf(0L) }
     LaunchedEffect(engine) {
-        lastFrameTimeNanos = 0f
+        var lastFrameTimeNanos = 0L
         while (true) {
             withFrameNanos { frameTimeNanos ->
-                if (lastFrameTimeNanos == 0f) {
-                    lastFrameTimeNanos = frameTimeNanos.toFloat()
-                } else {
-                    val dt = ((frameTimeNanos.toFloat() - lastFrameTimeNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
-                    lastFrameTimeNanos = frameTimeNanos.toFloat()
+                if (lastFrameTimeNanos != 0L) {
+                    val dt = ((frameTimeNanos - lastFrameTimeNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
                     engine.tick(dt)
+                    renderTick = frameTimeNanos
                     if (engine.period == MatchPeriod.FULL_TIME && !showEndStatsDialog) {
                         showEndStatsDialog = true
                     }
                 }
+                lastFrameTimeNanos = frameTimeNanos
             }
         }
     }
@@ -135,6 +135,7 @@ fun MatchScreen(
                 .fillMaxSize()
                 .testTag("match_canvas")
         ) {
+            val _tick = renderTick // Reading renderTick triggers DrawScope redraw at 60 FPS
             val canvasW = size.width
             val canvasH = size.height
 
@@ -204,7 +205,7 @@ fun MatchScreen(
         }
 
         // Active Aftertouch Indicator
-        if (engine.ball.aftertouchWindow > 0f && (abs(engine.ball.spinX) > 0.2f || abs(engine.ball.spinY) > 0.2f)) {
+        if (engine.isAftertouchActive) {
             Text(
                 text = "SWOS AFTERTOUCH >>",
                 fontFamily = ArcadeFontFamily,
@@ -308,15 +309,6 @@ fun MatchTopHud(
     val homeTeam = engine.settings.homeTeam
     val awayTeam = engine.settings.awayTeam
 
-    // Calculate match clock display
-    val totalHalf = engine.halfDurationSeconds
-    val currentSec = engine.matchTimeSeconds
-    val displayMin = if (engine.period <= MatchPeriod.HALF_TIME) {
-        ((currentSec / totalHalf) * 45f).toInt().coerceIn(0, 45)
-    } else {
-        (45f + ((currentSec - totalHalf) / totalHalf) * 45f).toInt().coerceIn(45, 90)
-    }
-
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xDD0E1812)),
@@ -357,7 +349,7 @@ fun MatchTopHud(
                     .padding(horizontal = 14.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "${engine.stats.homeGoals} - ${engine.stats.awayGoals}",
+                    text = "${engine.homeGoals} - ${engine.awayGoals}",
                     fontFamily = ArcadeFontFamily,
                     fontSize = 15.sp,
                     color = Color.White,
@@ -386,7 +378,7 @@ fun MatchTopHud(
             // Clock & Period
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "$displayMin:00",
+                    text = engine.matchClockDisplay,
                     fontFamily = MonoFontFamily,
                     fontSize = 14.sp,
                     color = SwosGold,

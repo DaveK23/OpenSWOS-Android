@@ -1,5 +1,10 @@
 package com.example.openswos.engine
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import com.example.openswos.audio.RetroAudio
 import com.example.openswos.model.Difficulty
@@ -150,13 +155,16 @@ class MatchEngine(
     val awayPlayers = mutableListOf<PlayerEntity>()
     val stats = MatchStats()
 
-    var period = MatchPeriod.PRE_MATCH
+    var homeGoals by mutableIntStateOf(0)
+    var awayGoals by mutableIntStateOf(0)
+    var period by mutableStateOf(MatchPeriod.PRE_MATCH)
     var matchTimeSeconds: Float = 0f
+    var matchClockDisplay by mutableStateOf("00:00")
     val halfDurationSeconds: Float = (settings.matchMinutes * 60f) / 2f
-    var isPaused: Boolean = false
+    var isPaused by mutableStateOf(false)
 
     var controlledPlayer: PlayerEntity? = null
-    var currentEventBanner: String? = null
+    var currentEventBanner by mutableStateOf<String?>(null)
     var bannerTimer: Float = 0f
 
     var cameraX: Float = CENTER_X
@@ -165,7 +173,9 @@ class MatchEngine(
     // Controls state
     var joystickX: Float = 0f
     var joystickY: Float = 0f
-    var actionCharge: Float = 0f
+    var actionCharge by mutableFloatStateOf(0f)
+    var isAftertouchActive by mutableStateOf(false)
+    var playerHasBall by mutableStateOf(false)
     var isActionHeld: Boolean = false
     var isShootHeld: Boolean = false
     var isTacklePressed: Boolean = false
@@ -359,6 +369,23 @@ class MatchEngine(
                 audio.playWhistle(true)
                 return
             }
+        }
+
+        // Update reactive UI indicators
+        playerHasBall = (ball.owner != null && ball.owner == controlledPlayer)
+        isAftertouchActive = ball.aftertouchWindow > 0f && (abs(ball.spinX) > 0.2f || abs(ball.spinY) > 0.2f)
+
+        // Update clock display
+        val totalHalf = halfDurationSeconds
+        val displayMin = if (period <= MatchPeriod.HALF_TIME) {
+            ((matchTimeSeconds / totalHalf) * 45f).toInt().coerceIn(0, 45)
+        } else {
+            (45f + ((matchTimeSeconds - totalHalf) / totalHalf) * 45f).toInt().coerceIn(45, 90)
+        }
+        val minStr = if (displayMin < 10) "0$displayMin" else "$displayMin"
+        val formattedClock = "$minStr:00"
+        if (matchClockDisplay != formattedClock) {
+            matchClockDisplay = formattedClock
         }
 
         // Update possession stats
@@ -827,9 +854,11 @@ class MatchEngine(
         val scorerName = ball.lastKicker?.player?.name ?: "Striker"
         if (scoringSide == TeamSide.HOME) {
             stats.homeGoals++
+            homeGoals = stats.homeGoals
             currentEventBanner = "GOAL! $scorerName"
         } else {
             stats.awayGoals++
+            awayGoals = stats.awayGoals
             currentEventBanner = "GOAL! $scorerName"
         }
         bannerTimer = 3.5f
