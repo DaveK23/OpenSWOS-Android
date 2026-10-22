@@ -164,6 +164,13 @@ class MatchEngine(
     var isPaused by mutableStateOf(false)
 
     var controlledPlayer: PlayerEntity? = null
+        set(value) {
+            // Strictly enforce that the human player only controls HOME players
+            if (value != null && value.side != TeamSide.HOME) {
+                return
+            }
+            field = value
+        }
     var currentEventBanner by mutableStateOf<String?>(null)
     var bannerTimer: Float = 0f
 
@@ -318,7 +325,11 @@ class MatchEngine(
         taker.facingAngle = if (taker.y > CENTER_Y) -PI.toFloat() / 2f else PI.toFloat() / 2f
         ball.owner = taker
         ball.lastKicker = taker
-        if (side == TeamSide.HOME) controlledPlayer = taker
+        if (side == TeamSide.HOME) {
+            controlledPlayer = taker
+        } else {
+            pickNextControlledPlayer()
+        }
         audio.playWhistle(false)
     }
 
@@ -481,6 +492,18 @@ class MatchEngine(
                 stats.awayPossessionSeconds += dt
             }
         }
+
+        // 0. Ensure human strictly controls a valid home outfield player (or GK during home restart)
+        if (controlledPlayer == null ||
+            controlledPlayer?.side != TeamSide.HOME ||
+            controlledPlayer?.isSentOff == true ||
+            (restartType == null && controlledPlayer?.isGoalkeeper == true)
+        ) {
+            pickNextControlledPlayer()
+        }
+
+        // Auto-switch defending player when ball is not held by HOME team
+        updateDefendingPlayerSelection()
 
         // 1. Process User Player Input
         processUserInput(dt)
@@ -701,7 +724,9 @@ class MatchEngine(
         }
 
         audio.playKick(0.6f)
-        controlledPlayer = target
+        if (kicker.side == TeamSide.HOME && target != null) {
+            controlledPlayer = target
+        }
     }
 
     private fun shootBall(kicker: PlayerEntity, power: Float) {
@@ -1101,14 +1126,39 @@ class MatchEngine(
 
         if (awardedSide == TeamSide.HOME) {
             controlledPlayer = taker
+        } else {
+            pickNextControlledPlayer()
         }
     }
 
-    private fun pickNextControlledPlayer() {
+    fun pickNextControlledPlayer() {
         val candidates = homePlayers.filter { !it.isGoalkeeper && !it.isSentOff }
         controlledPlayer = candidates.minByOrNull {
             (it.x - ball.x) * (it.x - ball.x) + (it.y - ball.y) * (it.y - ball.y)
         } ?: candidates.firstOrNull()
+    }
+
+    private fun updateDefendingPlayerSelection() {
+        if (ball.owner?.side == TeamSide.HOME) return
+        if (restartType != null) return
+
+        val current = controlledPlayer
+        val candidates = homePlayers.filter { !it.isGoalkeeper && !it.isSentOff }
+        val closest = candidates.minByOrNull {
+            (it.x - ball.x) * (it.x - ball.x) + (it.y - ball.y) * (it.y - ball.y)
+        } ?: return
+
+        if (current == null || current.side != TeamSide.HOME || current.isSentOff || current.isGoalkeeper) {
+            controlledPlayer = closest
+            return
+        }
+
+        // Switch to closer defender with hysteresis so it doesn't jitter rapidly
+        val currentDistSq = (current.x - ball.x) * (current.x - ball.x) + (current.y - ball.y) * (current.y - ball.y)
+        val closestDistSq = (closest.x - ball.x) * (closest.x - ball.x) + (closest.y - ball.y) * (closest.y - ball.y)
+        if (currentDistSq > closestDistSq + 120f * 120f) {
+            controlledPlayer = closest
+        }
     }
 
     private fun updateCamera(dt: Float) {

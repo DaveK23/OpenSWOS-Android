@@ -189,5 +189,105 @@ class ExampleUnitTest {
         assertEquals("Restart should execute upon player input", null, engine.restartType)
         assertEquals(null, engine.ball.owner)
     }
+
+    @Test
+    fun testControlledPlayerNeverAwayOnSetterOrPassOrRestarts() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val audio = RetroAudio(scope)
+        audio.soundEnabled = false
+
+        val settings = MatchSettings(
+            homeTeam = TeamDatabase.brazil,
+            awayTeam = TeamDatabase.england
+        )
+        val engine = MatchEngine(settings, audio)
+        val initialControlled = engine.controlledPlayer
+        assertNotNull(initialControlled)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, initialControlled!!.side)
+
+        // 1. Verify custom setter strictly rejects setting an AWAY player
+        val awayPlayer = engine.awayPlayers.first()
+        engine.controlledPlayer = awayPlayer
+        assertEquals(
+            "controlledPlayer should reject setting an AWAY player",
+            com.example.openswos.model.TeamSide.HOME,
+            engine.controlledPlayer?.side
+        )
+
+        // 2. Verify kickoff for away side leaves controlledPlayer as a HOME player
+        engine.setupKickoff(com.example.openswos.model.TeamSide.AWAY)
+        assertNotNull(engine.controlledPlayer)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, engine.controlledPlayer?.side)
+
+        // 3. Verify away restarts leave controlledPlayer as a HOME player
+        engine.triggerRestart(
+            MatchEngine.RestartType.CORNER,
+            com.example.openswos.model.TeamSide.AWAY,
+            androidx.compose.ui.geometry.Offset(600f, 100f)
+        )
+        assertNotNull(engine.controlledPlayer)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, engine.controlledPlayer?.side)
+
+        engine.triggerRestart(
+            MatchEngine.RestartType.GOAL_KICK,
+            com.example.openswos.model.TeamSide.AWAY,
+            androidx.compose.ui.geometry.Offset(350f, 1200f)
+        )
+        assertNotNull(engine.controlledPlayer)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, engine.controlledPlayer?.side)
+    }
+
+    @Test
+    fun testControlledPlayerRemainsHomeDuringCpuPossessionInBothHalves() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val audio = RetroAudio(scope)
+        audio.soundEnabled = false
+
+        val settings = MatchSettings(
+            homeTeam = TeamDatabase.brazil,
+            awayTeam = TeamDatabase.england
+        )
+        val engine = MatchEngine(settings, audio)
+        engine.period = MatchPeriod.FIRST_HALF
+        engine.restartType = null
+        engine.restartDelay = 0f
+
+        // Give ball to an away player in the top half (CPU defending half)
+        val cpuPlayerTop = engine.awayPlayers.first { !it.isGoalkeeper }
+        cpuPlayerTop.x = 350f
+        cpuPlayerTop.y = 300f // top half
+        engine.ball.owner = cpuPlayerTop
+        engine.ball.x = 350f
+        engine.ball.y = 300f
+
+        // Run multiple ticks where CPU AI acts, dribbles, passes, etc.
+        for (i in 1..100) {
+            engine.tick(0.016f)
+            assertNotNull(engine.controlledPlayer)
+            assertEquals(
+                "Controlled player must NEVER be an away player when CPU has ball in top half (tick $i)",
+                com.example.openswos.model.TeamSide.HOME,
+                engine.controlledPlayer?.side
+            )
+        }
+
+        // Give ball to an away player in the bottom half (CPU attacking half)
+        val cpuPlayerBottom = engine.awayPlayers.first { !it.isGoalkeeper }
+        cpuPlayerBottom.x = 350f
+        cpuPlayerBottom.y = 900f // bottom half
+        engine.ball.owner = cpuPlayerBottom
+        engine.ball.x = 350f
+        engine.ball.y = 900f
+
+        for (i in 1..100) {
+            engine.tick(0.016f)
+            assertNotNull(engine.controlledPlayer)
+            assertEquals(
+                "Controlled player must NEVER be an away player when CPU has ball in bottom half (tick $i)",
+                com.example.openswos.model.TeamSide.HOME,
+                engine.controlledPlayer?.side
+            )
+        }
+    }
 }
 
