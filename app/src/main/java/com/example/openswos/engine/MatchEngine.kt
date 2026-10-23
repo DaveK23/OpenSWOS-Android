@@ -188,8 +188,8 @@ class MatchEngine(
     var isTacklePressed: Boolean = false
 
     // Restart state
-    var restartType: RestartType? = RestartType.KICK_OFF
-    var restartSide: TeamSide = TeamSide.HOME
+    var restartType by mutableStateOf<RestartType?>(RestartType.KICK_OFF)
+    var restartSide by mutableStateOf(TeamSide.HOME)
     var restartPos = Offset(CENTER_X, CENTER_Y)
     var restartDelay: Float = 1.0f
     var restartHoldTimer: Float = 0f
@@ -353,6 +353,9 @@ class MatchEngine(
 
         // Dead ball / Restart delay & handling
         if (restartType != null) {
+            // Keep reactive possession indicator in sync with restart state
+            playerHasBall = (restartSide == TeamSide.HOME)
+
             if (restartDelay > 0f) {
                 restartDelay -= dt
             }
@@ -376,7 +379,7 @@ class MatchEngine(
             }
 
             // Keep ball held/attached to taker during restart
-            val currentTaker = ball.owner
+            val currentTaker = ball.owner ?: controlledPlayer
             if (currentTaker != null) {
                 if (restartType == RestartType.THROW_IN) {
                     ball.x = currentTaker.x + cos(currentTaker.facingAngle) * 8f
@@ -390,36 +393,39 @@ class MatchEngine(
             }
 
             // If human controlled taker during restart, allow aiming facing angle
-            if (restartSide == TeamSide.HOME && controlledPlayer != null) {
-                val player = controlledPlayer!!
-                val mag = sqrt(joystickX * joystickX + joystickY * joystickY)
-                if (mag > 0.2f) {
-                    val joyAngle = atan2(joystickY, joystickX)
-                    if (restartType == RestartType.THROW_IN) {
-                        val isLeftTouchline = player.x < CENTER_X
-                        if (isLeftTouchline) {
-                            // Facing right into pitch (-75 deg to +75 deg)
-                            player.facingAngle = joyAngle.coerceIn(-1.3f, 1.3f)
-                        } else {
-                            // Facing left into pitch
-                            player.facingAngle = if (joyAngle in -1.3f..1.3f) {
-                                if (joyAngle >= 0) (PI - 0.2).toFloat() else (-PI + 0.2).toFloat()
+            if (restartSide == TeamSide.HOME) {
+                val player = controlledPlayer ?: ball.owner ?: homePlayers.firstOrNull()
+                if (player != null) {
+                    val mag = sqrt(joystickX * joystickX + joystickY * joystickY)
+                    if (mag > 0.2f) {
+                        val joyAngle = atan2(joystickY, joystickX)
+                        if (restartType == RestartType.THROW_IN) {
+                            val isLeftTouchline = player.x < CENTER_X
+                            if (isLeftTouchline) {
+                                // Facing right into pitch (-75 deg to +75 deg)
+                                player.facingAngle = joyAngle.coerceIn(-1.3f, 1.3f)
                             } else {
-                                joyAngle
+                                // Facing left into pitch
+                                player.facingAngle = if (joyAngle in -1.3f..1.3f) {
+                                    if (joyAngle >= 0) (PI - 0.2).toFloat() else (-PI + 0.2).toFloat()
+                                } else {
+                                    joyAngle
+                                }
                             }
+                        } else {
+                            player.facingAngle = joyAngle
                         }
-                    } else {
-                        player.facingAngle = joyAngle
                     }
-                }
 
-                // If user pressed action/shoot during restart, trigger the pass immediately
-                if (isActionHeld || isShootHeld) {
-                    val isThrow = (restartType == RestartType.THROW_IN)
-                    isActionHeld = false
-                    isShootHeld = false
-                    actionCharge = 0f
-                    executeRestartPass(player, isThrowIn = isThrow)
+                    // If user pressed action/shoot/tackle during restart, trigger the pass immediately
+                    if (isActionHeld || isShootHeld || isTacklePressed) {
+                        val isThrow = (restartType == RestartType.THROW_IN)
+                        isActionHeld = false
+                        isShootHeld = false
+                        isTacklePressed = false
+                        actionCharge = 0f
+                        executeRestartPass(player, isThrowIn = isThrow)
+                    }
                 }
             }
 
@@ -592,13 +598,16 @@ class MatchEngine(
     }
 
     fun onActionRelease() {
-        val player = controlledPlayer ?: return
+        val player = controlledPlayer ?: ball.owner ?: (if (restartSide == TeamSide.HOME) homePlayers else awayPlayers).firstOrNull() ?: return
         val charge = actionCharge
         actionCharge = 0f
         isActionHeld = false
+        isShootHeld = false
+        isTacklePressed = false
 
         if (restartType != null) {
-            executeRestartPass(player, isThrowIn = (restartType == RestartType.THROW_IN))
+            val taker = ball.owner ?: player
+            executeRestartPass(taker, isThrowIn = (restartType == RestartType.THROW_IN))
             return
         }
 
@@ -679,13 +688,14 @@ class MatchEngine(
             audio.playKick(0.7f)
         }
 
-        if (taker.side == TeamSide.HOME && target != null) {
-            controlledPlayer = target
+        if (taker.side == TeamSide.HOME) {
+            controlledPlayer = target ?: teammates.firstOrNull() ?: homePlayers.firstOrNull { !it.isGoalkeeper }
         }
 
         restartType = null
         restartHoldTimer = 0f
         outOfBoundsCooldown = 1.0f
+        playerHasBall = false
     }
 
     private fun passToTeammate(kicker: PlayerEntity) {
@@ -1009,31 +1019,37 @@ class MatchEngine(
         }
 
         // Out of bounds - End lines (Corner or Goal Kick)
+        val isFirstHalf = period <= MatchPeriod.HALF_TIME
+        val topDefendingSide = if (isFirstHalf) TeamSide.AWAY else TeamSide.HOME
+        val topAttackingSide = if (isFirstHalf) TeamSide.HOME else TeamSide.AWAY
+        val botDefendingSide = if (isFirstHalf) TeamSide.HOME else TeamSide.AWAY
+        val botAttackingSide = if (isFirstHalf) TeamSide.AWAY else TeamSide.HOME
+
         val endlineMargin = 8f
         if (ball.y < PITCH_MARGIN_Y - endlineMargin) {
-            val lastSide = ball.lastKicker?.side ?: TeamSide.HOME
-            if (lastSide == TeamSide.AWAY) {
-                // Goal Kick for Top Keeper
-                triggerRestart(RestartType.GOAL_KICK, TeamSide.AWAY, Offset(CENTER_X, PITCH_MARGIN_Y + 40f))
-            } else {
-                // Corner Kick for Home
-                stats.homeCorners++
+            val lastSide = ball.lastKicker?.side ?: topAttackingSide
+            if (lastSide == topDefendingSide) {
+                // Defending side kicked it out over their own endline -> Corner for attacking side
+                if (topAttackingSide == TeamSide.HOME) stats.homeCorners++ else stats.awayCorners++
                 val cornerX = if (ball.x < CENTER_X) PITCH_MARGIN_X else PITCH_W - PITCH_MARGIN_X
-                triggerRestart(RestartType.CORNER, TeamSide.HOME, Offset(cornerX, PITCH_MARGIN_Y))
+                triggerRestart(RestartType.CORNER, topAttackingSide, Offset(cornerX, PITCH_MARGIN_Y))
+            } else {
+                // Attacking side kicked it out over opponent's endline -> Goal Kick for defending side
+                triggerRestart(RestartType.GOAL_KICK, topDefendingSide, Offset(CENTER_X, PITCH_MARGIN_Y + 40f))
             }
             return
         }
 
         if (ball.y > PITCH_H - PITCH_MARGIN_Y + endlineMargin) {
-            val lastSide = ball.lastKicker?.side ?: TeamSide.AWAY
-            if (lastSide == TeamSide.HOME) {
-                // Goal Kick for Bottom Keeper
-                triggerRestart(RestartType.GOAL_KICK, TeamSide.HOME, Offset(CENTER_X, PITCH_H - PITCH_MARGIN_Y - 40f))
-            } else {
-                // Corner Kick for Away
-                stats.awayCorners++
+            val lastSide = ball.lastKicker?.side ?: botAttackingSide
+            if (lastSide == botDefendingSide) {
+                // Defending side kicked it out over their own endline -> Corner for attacking side
+                if (botAttackingSide == TeamSide.HOME) stats.homeCorners++ else stats.awayCorners++
                 val cornerX = if (ball.x < CENTER_X) PITCH_MARGIN_X else PITCH_W - PITCH_MARGIN_X
-                triggerRestart(RestartType.CORNER, TeamSide.AWAY, Offset(cornerX, PITCH_H - PITCH_MARGIN_Y))
+                triggerRestart(RestartType.CORNER, botAttackingSide, Offset(cornerX, PITCH_H - PITCH_MARGIN_Y))
+            } else {
+                // Attacking side kicked it out over opponent's endline -> Goal Kick for defending side
+                triggerRestart(RestartType.GOAL_KICK, botDefendingSide, Offset(CENTER_X, PITCH_H - PITCH_MARGIN_Y - 40f))
             }
             return
         }
@@ -1126,7 +1142,9 @@ class MatchEngine(
 
         if (awardedSide == TeamSide.HOME) {
             controlledPlayer = taker
+            playerHasBall = true
         } else {
+            playerHasBall = false
             pickNextControlledPlayer()
         }
     }

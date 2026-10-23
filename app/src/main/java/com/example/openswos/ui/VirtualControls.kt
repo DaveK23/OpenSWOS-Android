@@ -216,11 +216,12 @@ fun DualActionButtons(
                         )
                     )
                 )
-                .pointerInput(hasBall, isHomeRestart) {
+                .pointerInput(engine) {
                     detectTapGestures(
                         onPress = {
                             onHaptic()
-                            if (hasBall) {
+                            val restartActive = engine.restartType != null && engine.restartSide == com.example.openswos.model.TeamSide.HOME
+                            if (engine.playerHasBall || restartActive) {
                                 engine.actionCharge = 0.1f
                                 engine.onActionRelease()
                             } else {
@@ -234,14 +235,24 @@ fun DualActionButtons(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = if (engine.restartType == MatchEngine.RestartType.THROW_IN) "THROW" else if (hasBall) "PASS" else "SLIDE",
+                    text = when {
+                        engine.restartType == MatchEngine.RestartType.THROW_IN -> "THROW"
+                        engine.restartType == MatchEngine.RestartType.GOAL_KICK -> "KICK"
+                        hasBall -> "PASS"
+                        else -> "SLIDE"
+                    },
                     fontFamily = ArcadeFontFamily,
                     fontSize = 9.sp,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (engine.restartType == MatchEngine.RestartType.THROW_IN) "IN" else if (hasBall) "TAP" else "TACKLE",
+                    text = when {
+                        engine.restartType == MatchEngine.RestartType.THROW_IN -> "IN"
+                        engine.restartType == MatchEngine.RestartType.GOAL_KICK -> "OUT"
+                        hasBall -> "TAP"
+                        else -> "TACKLE"
+                    },
                     fontFamily = ArcadeFontFamily,
                     fontSize = 7.sp,
                     color = SwosYellow
@@ -263,16 +274,22 @@ fun DualActionButtons(
                         )
                     )
                 )
-                .pointerInput(Unit) {
+                .pointerInput(engine) {
                     detectTapGestures(
                         onPress = {
                             onHaptic()
-                            isHeld = true
-                            engine.isActionHeld = true
-                            tryAwaitRelease()
-                            isHeld = false
-                            engine.onActionRelease()
-                            onHaptic()
+                            val restartActive = engine.restartType != null && engine.restartSide == com.example.openswos.model.TeamSide.HOME
+                            if (restartActive) {
+                                engine.actionCharge = 0.6f
+                                engine.onActionRelease()
+                            } else {
+                                isHeld = true
+                                engine.isActionHeld = true
+                                tryAwaitRelease()
+                                isHeld = false
+                                engine.onActionRelease()
+                                onHaptic()
+                            }
                         }
                     )
                 },
@@ -280,14 +297,14 @@ fun DualActionButtons(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "SHOOT",
+                    text = if (engine.restartType == MatchEngine.RestartType.GOAL_KICK) "LONG" else "SHOOT",
                     fontFamily = ArcadeFontFamily,
                     fontSize = 11.sp,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "AFTERTOUCH",
+                    text = if (engine.restartType == MatchEngine.RestartType.GOAL_KICK) "KICK" else "AFTERTOUCH",
                     fontFamily = ArcadeFontFamily,
                     fontSize = 6.sp,
                     color = SwosYellow
@@ -317,16 +334,22 @@ fun ClassicSwosButton(
                     )
                 )
             )
-            .pointerInput(Unit) {
+            .pointerInput(engine) {
                 detectTapGestures(
                     onPress = {
                         onHaptic()
-                        isHeld = true
-                        engine.isActionHeld = true
-                        tryAwaitRelease()
-                        isHeld = false
-                        engine.onActionRelease()
-                        onHaptic()
+                        val restartActive = engine.restartType != null && engine.restartSide == com.example.openswos.model.TeamSide.HOME
+                        if (restartActive) {
+                            engine.actionCharge = 0.3f
+                            engine.onActionRelease()
+                        } else {
+                            isHeld = true
+                            engine.isActionHeld = true
+                            tryAwaitRelease()
+                            isHeld = false
+                            engine.onActionRelease()
+                            onHaptic()
+                        }
                     }
                 )
             },

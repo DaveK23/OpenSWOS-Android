@@ -289,5 +289,170 @@ class ExampleUnitTest {
             )
         }
     }
+
+    @Test
+    fun testGoalKickExecutionHome() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val audio = RetroAudio(scope)
+        audio.soundEnabled = false
+
+        val settings = MatchSettings(
+            homeTeam = TeamDatabase.brazil,
+            awayTeam = TeamDatabase.england
+        )
+        val engine = MatchEngine(settings, audio)
+        engine.period = MatchPeriod.FIRST_HALF
+
+        // Trigger goal kick for Home team (bottom goal in first half)
+        engine.triggerRestart(
+            MatchEngine.RestartType.GOAL_KICK,
+            com.example.openswos.model.TeamSide.HOME,
+            androidx.compose.ui.geometry.Offset(350f, 1200f)
+        )
+
+        assertEquals(MatchEngine.RestartType.GOAL_KICK, engine.restartType)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, engine.restartSide)
+        assertTrue("playerHasBall should be true on Home restart", engine.playerHasBall)
+        assertNotNull(engine.controlledPlayer)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, engine.controlledPlayer?.side)
+        assertTrue("Controlled player on goal kick should be the goalkeeper", engine.controlledPlayer!!.isGoalkeeper)
+
+        // Aiming joystick should adjust goalkeeper angle and keep ball placed
+        engine.joystickX = 0f
+        engine.joystickY = -1f // Aiming upfield
+        engine.tick(0.016f)
+        assertEquals(-Math.PI.toFloat() / 2f, engine.controlledPlayer!!.facingAngle, 0.05f)
+
+        // Taking the goal kick via action release
+        engine.onActionRelease()
+
+        assertEquals("Restart type should be cleared", null, engine.restartType)
+        assertEquals("Ball owner cleared on kick launch", null, engine.ball.owner)
+        assertTrue("Goal kick should launch with high vertical arc", engine.ball.vz > 0f)
+        assertTrue("Controlled player handed over to outfield teammate", !engine.controlledPlayer!!.isGoalkeeper)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, engine.controlledPlayer?.side)
+    }
+
+    @Test
+    fun testGoalKickExecutionAwayCpu() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val audio = RetroAudio(scope)
+        audio.soundEnabled = false
+
+        val settings = MatchSettings(
+            homeTeam = TeamDatabase.brazil,
+            awayTeam = TeamDatabase.england
+        )
+        val engine = MatchEngine(settings, audio)
+        engine.period = MatchPeriod.FIRST_HALF
+
+        // Trigger goal kick for Away (CPU) team (top goal in first half)
+        engine.triggerRestart(
+            MatchEngine.RestartType.GOAL_KICK,
+            com.example.openswos.model.TeamSide.AWAY,
+            androidx.compose.ui.geometry.Offset(350f, 100f)
+        )
+
+        assertEquals(MatchEngine.RestartType.GOAL_KICK, engine.restartType)
+        assertEquals(com.example.openswos.model.TeamSide.AWAY, engine.restartSide)
+        assertTrue("playerHasBall should be false on Away restart", !engine.playerHasBall)
+
+        // Tick past restart delay
+        engine.restartDelay = 0.05f
+        engine.tick(0.06f)
+
+        // CPU must auto-execute the goal kick
+        assertEquals("CPU should have executed goal kick and cleared restartType", null, engine.restartType)
+        assertTrue("Ball outOfBoundsCooldown active", engine.outOfBoundsCooldown > 0f)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, engine.controlledPlayer?.side)
+    }
+
+    @Test
+    fun testRestartInputViaTackleOrShootDoesNotGetStuck() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val audio = RetroAudio(scope)
+        audio.soundEnabled = false
+
+        val settings = MatchSettings(
+            homeTeam = TeamDatabase.brazil,
+            awayTeam = TeamDatabase.england
+        )
+        val engine = MatchEngine(settings, audio)
+        engine.period = MatchPeriod.FIRST_HALF
+
+        // 1. Throw-in triggered
+        engine.triggerRestart(
+            MatchEngine.RestartType.THROW_IN,
+            com.example.openswos.model.TeamSide.HOME,
+            androidx.compose.ui.geometry.Offset(50f, 600f)
+        )
+        assertEquals(MatchEngine.RestartType.THROW_IN, engine.restartType)
+
+        // Simulate user pressing tackle button while restart is active
+        engine.isTacklePressed = true
+        engine.tick(0.016f)
+
+        // Must execute throw-in immediately instead of getting stuck or dropping the input
+        assertEquals("Throw-in should execute on tackle input during restart", null, engine.restartType)
+        assertTrue(!engine.isTacklePressed)
+
+        // 2. Goal kick triggered
+        engine.outOfBoundsCooldown = 0f
+        engine.triggerRestart(
+            MatchEngine.RestartType.GOAL_KICK,
+            com.example.openswos.model.TeamSide.HOME,
+            androidx.compose.ui.geometry.Offset(350f, 1200f)
+        )
+        assertEquals(MatchEngine.RestartType.GOAL_KICK, engine.restartType)
+
+        // Simulate user holding shoot button
+        engine.isShootHeld = true
+        engine.tick(0.016f)
+
+        // Must execute goal kick immediately
+        assertEquals("Goal kick should execute on shoot held during restart", null, engine.restartType)
+        assertTrue(!engine.isShootHeld)
+    }
+
+    @Test
+    fun testEndlineRulesInFirstAndSecondHalves() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val audio = RetroAudio(scope)
+        audio.soundEnabled = false
+
+        val settings = MatchSettings(
+            homeTeam = TeamDatabase.brazil,
+            awayTeam = TeamDatabase.england
+        )
+        val engine = MatchEngine(settings, audio)
+
+        // FIRST HALF: Home attacks top, defends bottom. Away attacks bottom, defends top.
+        engine.period = MatchPeriod.FIRST_HALF
+        engine.restartType = null
+        engine.outOfBoundsCooldown = 0f
+
+        // Ball goes over top endline wide of goal (ball.x = 100f, goal is 280f..420f)
+        // Home touched it last (Home shot wide) -> Goal kick for Away
+        engine.ball.x = 100f
+        engine.ball.y = 30f // above top margin (PITCH_MARGIN_Y is 60f)
+        engine.ball.lastKicker = engine.homePlayers.first()
+        engine.tick(0.016f)
+        assertEquals("Attacking shot wide over top endline should be Away goal kick", MatchEngine.RestartType.GOAL_KICK, engine.restartType)
+        assertEquals(com.example.openswos.model.TeamSide.AWAY, engine.restartSide)
+
+        // SECOND HALF: Home defends top, attacks bottom. Away defends bottom, attacks top.
+        engine.period = MatchPeriod.SECOND_HALF
+        engine.restartType = null
+        engine.outOfBoundsCooldown = 0f
+
+        // Ball goes over top endline wide of goal, Away touched it last (Away shot wide) -> Goal kick for Home
+        engine.ball.x = 100f
+        engine.ball.y = 30f
+        engine.ball.lastKicker = engine.awayPlayers.first()
+        engine.tick(0.016f)
+        assertEquals("Attacking shot wide in 2nd half over top endline should be Home goal kick", MatchEngine.RestartType.GOAL_KICK, engine.restartType)
+        assertEquals(com.example.openswos.model.TeamSide.HOME, engine.restartSide)
+    }
 }
+
 
