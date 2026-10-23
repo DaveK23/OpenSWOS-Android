@@ -453,6 +453,32 @@ class ExampleUnitTest {
         assertEquals("Attacking shot wide in 2nd half over top endline should be Home goal kick", MatchEngine.RestartType.GOAL_KICK, engine.restartType)
         assertEquals(com.example.openswos.model.TeamSide.HOME, engine.restartSide)
     }
+
+    @Test
+    fun testPitchTypeVisualAndPhysicsProperties() {
+        // Verify all 4 pitch types exist and have distinct visual identities
+        val pitchTypes = PitchType.values()
+        assertEquals(4, pitchTypes.size)
+
+        // 1. Frozen / Winter pitch should have high visibility orange ball and lines
+        val frozen = PitchType.FROZEN
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFF4500), frozen.lineColor)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFF6D00), frozen.ballColor)
+        assertTrue("Frozen bounce factor should be high", frozen.bounceFactor > 0.8f)
+
+        // 2. Muddy pitch should have mud ball and low bounce
+        val mud = PitchType.WET_MUD
+        assertTrue("Mud bounce factor should be low", mud.bounceFactor <= 0.45f)
+        assertEquals("Heavy Rain", mud.weatherName)
+
+        // 3. Astro pitch should have high bounce and synthetic colors
+        val astro = PitchType.ASTRO
+        assertTrue("Astro bounce factor should be high", astro.bounceFactor >= 0.75f)
+
+        // 4. Grass pitch
+        val grass = PitchType.GRASS
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFFFFFF), grass.lineColor)
+    }
 }
 
 

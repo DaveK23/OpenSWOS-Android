@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import com.example.openswos.audio.RetroAudio
 import com.example.openswos.data.TeamDatabase
 import com.example.openswos.model.MatchSettings
+import com.example.openswos.model.PitchType
 import com.example.openswos.model.Team
 import com.example.ui.theme.ArcadeFontFamily
 import com.example.ui.theme.MonoFontFamily
@@ -269,7 +270,8 @@ fun TournamentScreen(
                                 MatchSettings(
                                     homeTeam = match.teamA,
                                     awayTeam = match.teamB,
-                                    matchMinutes = 3
+                                    matchMinutes = 3,
+                                    pitchType = PitchType.FROZEN
                                 )
                             )
                         }
@@ -288,7 +290,8 @@ fun TournamentScreen(
                         MatchSettings(
                             homeTeam = userQf.teamA,
                             awayTeam = userQf.teamB,
-                            matchMinutes = 3
+                            matchMinutes = 3,
+                            pitchType = PitchType.FROZEN
                         )
                     )
                 },

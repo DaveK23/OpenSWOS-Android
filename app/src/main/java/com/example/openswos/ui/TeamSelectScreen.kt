@@ -288,6 +288,82 @@ fun TeamSelectScreen(
                         }
                     )
 
+                    // Visual Pitch Condition Swatch & Overview
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF09140D))
+                            .border(1.dp, pitchType.lineColor.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Mini Pitch Swatch Box
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 50.dp, height = 36.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(pitchType.grassDark)
+                                    .border(1.dp, pitchType.lineColor, RoundedCornerShape(4.dp))
+                            ) {
+                                // Top half lighter stripe
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(18.dp)
+                                        .background(pitchType.grassLight)
+                                )
+                                // Halfway line
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(2.dp)
+                                        .align(Alignment.Center)
+                                        .background(pitchType.lineColor)
+                                )
+                                // Ball dot
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .align(Alignment.Center)
+                                        .background(pitchType.ballColor)
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "${pitchType.badgeEmoji} ${pitchType.displayName.uppercase()}",
+                                        fontFamily = ArcadeFontFamily,
+                                        fontSize = 9.sp,
+                                        color = SwosGold
+                                    )
+                                    Text(
+                                        text = "• ${pitchType.weatherName}",
+                                        fontFamily = MonoFontFamily,
+                                        fontSize = 9.sp,
+                                        color = Color(0xFFA3C2AD)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = pitchType.description,
+                                    fontFamily = MonoFontFamily,
+                                    fontSize = 8.sp,
+                                    color = PitchLineWhite,
+                                    lineHeight = 11.sp
+                                )
+                            }
+                        }
+                    }
+
                     // Match Length Selector
                     OptionRow(
                         label = "TIME",

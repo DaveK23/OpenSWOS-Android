@@ -148,6 +148,7 @@ fun MatchScreen(
                     MatchRenderer.drawPitch(this, engine)
                     MatchRenderer.drawPlayers(this, engine)
                     MatchRenderer.drawBall(this, engine)
+                    MatchRenderer.drawWeather(this, engine)
                 }
             }
 
@@ -384,19 +385,32 @@ fun MatchTopHud(
                     color = SwosGold,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = when (engine.period) {
-                        MatchPeriod.PRE_MATCH -> "READY"
-                        MatchPeriod.FIRST_HALF -> "1ST"
-                        MatchPeriod.HALF_TIME -> "HT"
-                        MatchPeriod.SECOND_HALF -> "2ND"
-                        MatchPeriod.FULL_TIME -> "FT"
-                        else -> "ET"
-                    },
-                    fontFamily = ArcadeFontFamily,
-                    fontSize = 8.sp,
-                    color = Color(0xFFA3C2AD)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = when (engine.period) {
+                            MatchPeriod.PRE_MATCH -> "READY"
+                            MatchPeriod.FIRST_HALF -> "1ST"
+                            MatchPeriod.HALF_TIME -> "HT"
+                            MatchPeriod.SECOND_HALF -> "2ND"
+                            MatchPeriod.FULL_TIME -> "FT"
+                            else -> "ET"
+                        },
+                        fontFamily = ArcadeFontFamily,
+                        fontSize = 8.sp,
+                        color = Color(0xFFA3C2AD)
+                    )
+                    Text(
+                        text = "•",
+                        fontSize = 8.sp,
+                        color = Color(0xFFA3C2AD)
+                    )
+                    Text(
+                        text = "${engine.settings.pitchType.badgeEmoji} ${engine.settings.pitchType.displayName.uppercase()}",
+                        fontFamily = ArcadeFontFamily,
+                        fontSize = 7.sp,
+                        color = SwosYellow
+                    )
+                }
             }
 
             // Actions: Radar toggle and Pause
@@ -473,6 +487,13 @@ fun PauseMenuDialog(
                     fontFamily = MonoFontFamily,
                     fontSize = 14.sp,
                     color = PitchLineWhite
+                )
+
+                Text(
+                    text = "${engine.settings.pitchType.badgeEmoji} ${engine.settings.pitchType.displayName} • ${engine.settings.pitchType.weatherName}",
+                    fontFamily = MonoFontFamily,
+                    fontSize = 12.sp,
+                    color = SwosGold
                 )
 
                 Button(
